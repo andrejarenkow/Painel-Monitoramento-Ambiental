@@ -12,11 +12,22 @@ st.set_page_config(
     page_title="Painel Monitoramnto Ambiental",
     page_icon="🧊",
     layout="wide",
-    initial_sidebar_state="collapsed",
 )
 
 # Título principal do painel
 st.columns([1.5,7,1])[1].subheader("Painel de Monitoramento Ambiental do SARS-CoV-2 no Rio Grande do Sul, Brasil")
+
+# Carregando os dados de casos diários
+casos = pd.read_csv('https://docs.google.com/spreadsheets/d/e/2PACX-1vTZfjxdY8_x5WNd9_NE3QQPeche-dMdY5KdvNpq8H4W-lmUTidwrKpV0uLzLtihV7UAPIl68WvugMsN/pub?gid=1012737506&single=true&output=csv')
+casos['Data sintomas'] = pd.to_datetime(casos['Data sintomas'], dayfirst=True).dt.date
+
+
+# Carregando os dados de carga viral
+carga_viral = pd.read_csv('https://docs.google.com/spreadsheets/d/e/2PACX-1vTZfjxdY8_x5WNd9_NE3QQPeche-dMdY5KdvNpq8H4W-lmUTidwrKpV0uLzLtihV7UAPIl68WvugMsN/pub?gid=0&single=true&output=csv')
+carga_viral['Data de coleta'] = pd.to_datetime(carga_viral['Data de coleta'], dayfirst=True).dt.date
+carga_viral = carga_viral.dropna(subset=['Data de coleta'])
+#carga_viral = carga_viral[carga_viral['Local de coleta']=='ETE Serraria']
+carga_viral['carga_viral_n1'] = pd.to_numeric(carga_viral['carga_viral_n1'] , errors='coerce')
 
 # Barra lateral para seleção de filtros
 with st.sidebar:
@@ -28,6 +39,10 @@ with st.sidebar:
     data_final = st.date_input(
         "Data inicial",
         datetime.date.today())
+    
+    municipios = st.selectbox(
+    'Quais municípios você quer ver?',
+    casos['Município'].unique(), index=8)
 
 # Texto de introdução
 texto = """ 
@@ -41,6 +56,8 @@ Abaixo você pode verificar os dados disponíveis sobre o projeto.
 \n
 \n
 """
+
+
 with st.container():
     st.markdown('**O que é o monitoramento ambiental?**')
     st.markdown(texto)
@@ -48,22 +65,10 @@ with st.container():
 # Divisão de colunas
 col2, col3 = st.columns([2,3])
 
-# Carregando os dados de carga viral
-carga_viral = pd.read_csv('https://docs.google.com/spreadsheets/d/e/2PACX-1vTZfjxdY8_x5WNd9_NE3QQPeche-dMdY5KdvNpq8H4W-lmUTidwrKpV0uLzLtihV7UAPIl68WvugMsN/pub?gid=0&single=true&output=csv')
-carga_viral['Data de coleta'] = pd.to_datetime(carga_viral['Data de coleta'], dayfirst=True).dt.date
-carga_viral = carga_viral.dropna(subset=['Data de coleta'])
-carga_viral = carga_viral[carga_viral['Local de coleta']=='ETE Serraria']
-carga_viral['carga_viral_n1'] = pd.to_numeric(carga_viral['carga_viral_n1'] , errors='coerce')
-
-# Carregando os dados de casos diários
-casos = pd.read_csv('https://docs.google.com/spreadsheets/d/e/2PACX-1vTZfjxdY8_x5WNd9_NE3QQPeche-dMdY5KdvNpq8H4W-lmUTidwrKpV0uLzLtihV7UAPIl68WvugMsN/pub?gid=1012737506&single=true&output=csv')
-casos['Data sintomas'] = pd.to_datetime(casos['Data sintomas'], dayfirst=True).dt.date
-casos = casos[casos['Município'] == 'PORTO ALEGRE']
-
 # Aplicando os filtros ao período escolhido
-casos_grafico = casos[(casos['Data sintomas']>data_inicial)&(casos['Data sintomas']<data_final)]
-carga_viral_grafico = carga_viral[(carga_viral['Data de coleta']>data_inicial)&(carga_viral['Data de coleta']<data_final)]
-
+casos_grafico = casos[(casos['Data sintomas']>data_inicial)&(casos['Data sintomas']<data_final)&(casos['Município']==(municipios))]
+carga_viral_grafico = carga_viral[(carga_viral['Data de coleta']>data_inicial)&(carga_viral['Data de coleta']<data_final)&(carga_viral['Município']==(municipios))]
+carga_viral_grafico = carga_viral_grafico.dropna(subset='carga_viral_n1')
 # Criando os gráficos
 fig = make_subplots(specs=[[{"secondary_y": True}]])
 
@@ -98,15 +103,24 @@ csv = convert_df(carga_viral_grafico)
 
 # Coluna da direita - Métricas
 with col2:
-    media_ultimo_resultado = int((carga_viral['carga_viral_n1'].iloc[-1] + carga_viral['carga_viral_n1'].iloc[-2])/2)
-    media_penultimo_resultado = int((carga_viral['carga_viral_n1'].iloc[-3] + carga_viral['carga_viral_n1'].iloc[-4])/2)
+    try:
+        media_ultimo_resultado = int((carga_viral_grafico['carga_viral_n1'].iloc[-1] + carga_viral_grafico['carga_viral_n1'].iloc[-2])/2)
+        media_penultimo_resultado = int((carga_viral_grafico['carga_viral_n1'].iloc[-3] + carga_viral_grafico['carga_viral_n1'].iloc[-4])/2)
+    except:
+        media_ultimo_resultado = 'Sem coletas'
+        media_penultimo_resultado = 'Sem coletas'
     metrica1, metrica2, metrica3 = st.columns(3)
     with metrica1:
-        st.metric('Média da Carga Viral', "{:,}".format(media_ultimo_resultado), "{:,}".format(media_ultimo_resultado - media_penultimo_resultado), delta_color='inverse')
+        try:
+            st.metric('Média da Carga Viral', "{:,}".format(media_ultimo_resultado), "{:,}".format(media_ultimo_resultado - media_penultimo_resultado), delta_color='inverse')
+        except:
+            st.metric('Média da Carga Viral','-')
     with metrica2:
-        st.metric('Máximo carga viral', "{:,}".format(int(carga_viral_grafico['carga_viral_n1'].max())))
-    with metrica3:
-        st.metric('Maior número de casos', "{:,}".format(int(casos_grafico['Casos'].max())))
+        try:
+            st.metric('Máximo carga viral', "{:,}".format(int(carga_viral_grafico['carga_viral_n1'].max())))
+        except:
+            st.metric('Máximo carga viral', '-')
+
 
     st.download_button(
         label="Baixar dados da carga viral em CSV",
