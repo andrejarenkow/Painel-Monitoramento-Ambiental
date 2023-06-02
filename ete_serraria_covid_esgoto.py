@@ -41,7 +41,7 @@ with st.sidebar:
         datetime.date.today())
     
     municipios = st.selectbox(
-    'Quais municípios você quer ver?',
+    'Qual município você quer ver?',
     casos['Município'].unique(), index=8)
 
 # Texto de introdução
