@@ -114,3 +114,6 @@ with col2:
         file_name='dados_carga_viral.csv',
         mime='text/csv',
     )
+
+with col3:
+    st.write(fig)
